@@ -22,12 +22,59 @@ body {
 }
 
 .app {
-  width: min(760px, 100%);
+  width: min(980px, 100%);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 16px;
   box-shadow: 0 8px 30px rgba(31, 42, 46, 0.12);
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 16px;
+}
+
+.chat-pane {
+  min-width: 0;
+}
+
+.rooms-pane {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.rooms-pane h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.rooms-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.room-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f7f3ea;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.room-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.rooms-empty {
+  color: #586066;
+  font-size: 14px;
 }
 
 header h1 {
@@ -100,6 +147,10 @@ button:hover {
 }
 
 @media (max-width: 600px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
   .room-controls,
   .composer {
     grid-template-columns: 1fr;

@@ -107,6 +107,21 @@ function emitRoomOnline(room) {
   });
 }
 
+function getOpenRooms() {
+  const out = [];
+  for (const [room, members] of io.sockets.adapter.rooms) {
+    if (io.sockets.sockets.has(room)) continue;
+    if (!/^[A-Z0-9]{1,12}$/.test(room)) continue;
+    out.push({ room, count: members.size });
+  }
+  out.sort((a, b) => b.count - a.count || a.room.localeCompare(b.room));
+  return out;
+}
+
+function broadcastRoomsList() {
+  io.emit("rooms-list", getOpenRooms());
+}
+
 function joinRoom(socket, requestedRoom) {
   const nextRoom = normalizeRoom(requestedRoom);
   const prevRoom = socket.data.room;
@@ -117,6 +132,7 @@ function joinRoom(socket, requestedRoom) {
       room: nextRoom,
       online: roomOnlineCount(nextRoom)
     });
+    socket.emit("rooms-list", getOpenRooms());
     readRoomHistory(nextRoom, (history) => {
       socket.emit("room-history", history);
     });
@@ -147,6 +163,7 @@ function joinRoom(socket, requestedRoom) {
     timestamp: Date.now()
   });
   emitRoomOnline(nextRoom);
+  broadcastRoomsList();
 
   readRoomHistory(nextRoom, (history) => {
     socket.emit("room-history", history);
@@ -166,6 +183,7 @@ io.on("connection", (socket) => {
   });
 
   joinRoom(socket, DEFAULT_ROOM);
+  socket.emit("rooms-list", getOpenRooms());
 
   socket.on("join-room", (roomCode) => {
     joinRoom(socket, roomCode);
@@ -219,6 +237,7 @@ io.on("connection", (socket) => {
       timestamp: Date.now()
     });
     emitRoomOnline(room);
+    broadcastRoomsList();
   });
 });
 

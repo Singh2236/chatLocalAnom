@@ -7,9 +7,11 @@ const formEl = document.getElementById("chat-form");
 const inputEl = document.getElementById("message-input");
 const roomInputEl = document.getElementById("room-input");
 const joinRoomBtnEl = document.getElementById("join-room-btn");
+const roomsListEl = document.getElementById("rooms-list");
 
 let currentRoom = "LOBBY";
 let nickname = "";
+let latestRooms = [];
 
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -60,6 +62,34 @@ function appendChatMessage(from, text, timestamp) {
 function setRoom(room) {
   currentRoom = room;
   roomEl.textContent = `Room: ${room}`;
+  renderRoomsList(latestRooms);
+}
+
+function renderRoomsList(rooms) {
+  latestRooms = rooms;
+  roomsListEl.innerHTML = "";
+
+  if (!rooms.length) {
+    const empty = document.createElement("li");
+    empty.className = "rooms-empty";
+    empty.textContent = "No open rooms yet";
+    roomsListEl.appendChild(empty);
+    return;
+  }
+
+  for (const item of rooms) {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "room-item";
+    button.dataset.room = item.room;
+    if (item.room === currentRoom) {
+      button.classList.add("active");
+    }
+    button.innerHTML = `<span>${item.room}</span><span>${item.count}</span>`;
+    li.appendChild(button);
+    roomsListEl.appendChild(li);
+  }
 }
 
 socket.on("connect", () => {
@@ -108,6 +138,16 @@ socket.on("chat-message", ({ room, from, text, timestamp }) => {
 
 socket.on("rate-limited", ({ message }) => {
   appendSystemMessage(message || "Slow down.");
+});
+
+socket.on("rooms-list", (rooms) => {
+  renderRoomsList(Array.isArray(rooms) ? rooms : []);
+});
+
+roomsListEl.addEventListener("click", (e) => {
+  const target = e.target.closest(".room-item");
+  if (!target) return;
+  socket.emit("join-room", target.dataset.room || "LOBBY");
 });
 
 joinRoomBtnEl.addEventListener("click", () => {

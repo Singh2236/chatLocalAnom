@@ -8,24 +8,31 @@
   </head>
   <body>
     <main class="app">
-      <header>
-        <h1>Local Anonymous Chat</h1>
-        <p id="status">Connecting...</p>
-        <p id="room">Room: LOBBY</p>
-        <p id="online">Online in room: 0</p>
-      </header>
+      <section class="chat-pane">
+        <header>
+          <h1>Local Anonymous Chat</h1>
+          <p id="status">Connecting...</p>
+          <p id="room">Room: LOBBY</p>
+          <p id="online">Online in room: 0</p>
+        </header>
 
-      <section class="room-controls">
-        <input id="room-input" maxlength="12" placeholder="Room code (e.g. TEAM1)" />
-        <button id="join-room-btn" type="button">Join / Create Room</button>
+        <section class="room-controls">
+          <input id="room-input" maxlength="12" placeholder="Room code (e.g. TEAM1)" />
+          <button id="join-room-btn" type="button">Join / Create Room</button>
+        </section>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer" autocomplete="off">
+          <input id="message-input" name="message" maxlength="500" placeholder="Type a message" required />
+          <button type="submit">Send</button>
+        </form>
       </section>
 
-      <section id="messages" class="messages" aria-live="polite"></section>
-
-      <form id="chat-form" class="composer" autocomplete="off">
-        <input id="message-input" name="message" maxlength="500" placeholder="Type a message" required />
-        <button type="submit">Send</button>
-      </form>
+      <aside class="rooms-pane">
+        <h2>Open Rooms</h2>
+        <ul id="rooms-list" class="rooms-list" aria-live="polite"></ul>
+      </aside>
     </main>
 
     <script src="/socket.io/socket.io.js"></script>
