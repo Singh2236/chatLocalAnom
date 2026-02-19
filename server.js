@@ -1,8 +1,10 @@
-﻿const path = require("path");
+﻿const fs = require("fs");
+const path = require("path");
 const http = require("http");
 const express = require("express");
 const { Server } = require("socket.io");
 const sqlite3 = require("sqlite3").verbose();
+const multer = require("multer");
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +15,9 @@ const HISTORY_LIMIT = 100;
 const MAX_MSG_PER_WINDOW = 6;
 const RATE_WINDOW_MS = 10000;
 const MIN_MSG_GAP_MS = 400;
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const db = new sqlite3.Database(path.join(__dirname, "chat.db"));
 
@@ -36,6 +41,41 @@ db.serialize(() => {
 });
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads", express.static(UPLOAD_DIR));
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || "").startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only image files are allowed"));
+  }
+});
+
+app.post("/upload", (req, res) => {
+  upload.single("image")(req, res, (err) => {
+    if (err) {
+      res.status(400).json({ error: err.message || "Upload failed" });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "No image file provided" });
+      return;
+    }
+    res.json({ url: `/uploads/${req.file.filename}` });
+  });
+});
 
 function randomName() {
   const adjectives = ["Silent", "Brave", "Swift", "Curious", "Calm", "Bright", "Hidden", "Lucky"];
@@ -54,16 +94,7 @@ function normalizeRoom(input) {
   return clean || DEFAULT_ROOM;
 }
 
-const blockedWords = [
-  "fuck",
-  "shit",
-  "bitch",
-  "asshole",
-  "bastard",
-  "dick",
-  "cunt",
-  "motherfucker"
-];
+const blockedWords = ["fuck", "shit", "bitch", "asshole", "bastard", "dick", "cunt", "motherfucker"];
 
 function censorProfanity(text) {
   let out = text;
@@ -76,6 +107,23 @@ function censorProfanity(text) {
 
 function roomOnlineCount(room) {
   return io.sockets.adapter.rooms.get(room)?.size || 0;
+}
+
+function parseStoredMessage(row) {
+  if (String(row.text).startsWith("__IMG__:")) {
+    return {
+      sender: row.sender,
+      type: "image",
+      url: row.text.replace("__IMG__:", ""),
+      timestamp: row.timestamp
+    };
+  }
+  return {
+    sender: row.sender,
+    type: "text",
+    text: row.text,
+    timestamp: row.timestamp
+  };
 }
 
 function readRoomHistory(room, callback) {
@@ -93,7 +141,7 @@ function readRoomHistory(room, callback) {
         callback([]);
         return;
       }
-      callback(rows.reverse());
+      callback(rows.reverse().map(parseStoredMessage));
     }
   );
 }
@@ -143,6 +191,29 @@ function broadcastRoomsList() {
   getRoomsList((rooms) => {
     io.emit("rooms-list", rooms);
   });
+}
+
+function overRateLimit(socket, now) {
+  if (now - socket.data.lastMessageAt < MIN_MSG_GAP_MS) {
+    socket.emit("rate-limited", {
+      message: "You are sending too fast. Slow down."
+    });
+    return true;
+  }
+
+  const recent = socket.data.rate.filter((ts) => now - ts < RATE_WINDOW_MS);
+  if (recent.length >= MAX_MSG_PER_WINDOW) {
+    socket.emit("rate-limited", {
+      message: "Rate limit reached. Wait a few seconds."
+    });
+    socket.data.rate = recent;
+    return true;
+  }
+
+  recent.push(now);
+  socket.data.rate = recent;
+  socket.data.lastMessageAt = now;
+  return false;
 }
 
 function joinRoom(socket, requestedRoom) {
@@ -219,25 +290,7 @@ io.on("connection", (socket) => {
     if (!raw) return;
 
     const now = Date.now();
-    if (now - socket.data.lastMessageAt < MIN_MSG_GAP_MS) {
-      socket.emit("rate-limited", {
-        message: "You are sending too fast. Slow down."
-      });
-      return;
-    }
-
-    const recent = socket.data.rate.filter((ts) => now - ts < RATE_WINDOW_MS);
-    if (recent.length >= MAX_MSG_PER_WINDOW) {
-      socket.emit("rate-limited", {
-        message: "Rate limit reached. Wait a few seconds."
-      });
-      socket.data.rate = recent;
-      return;
-    }
-
-    recent.push(now);
-    socket.data.rate = recent;
-    socket.data.lastMessageAt = now;
+    if (overRateLimit(socket, now)) return;
 
     const filtered = censorProfanity(raw.slice(0, 500));
     const payload = {
@@ -249,6 +302,25 @@ io.on("connection", (socket) => {
 
     io.to(room).emit("chat-message", payload);
     saveMessage(room, payload.from, payload.text, payload.timestamp);
+  });
+
+  socket.on("chat-image", (url) => {
+    const room = socket.data.room || DEFAULT_ROOM;
+    const cleanUrl = String(url || "").trim();
+    if (!cleanUrl.startsWith("/uploads/")) return;
+
+    const now = Date.now();
+    if (overRateLimit(socket, now)) return;
+
+    const payload = {
+      room,
+      from: socket.data.nickname,
+      url: cleanUrl,
+      timestamp: now
+    };
+
+    io.to(room).emit("chat-image", payload);
+    saveMessage(room, payload.from, `__IMG__:${payload.url}`, payload.timestamp);
   });
 
   socket.on("disconnect", () => {

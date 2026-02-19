@@ -8,6 +8,8 @@ const inputEl = document.getElementById("message-input");
 const roomInputEl = document.getElementById("room-input");
 const joinRoomBtnEl = document.getElementById("join-room-btn");
 const roomsListEl = document.getElementById("rooms-list");
+const imageInputEl = document.getElementById("image-input");
+const uploadImageBtnEl = document.getElementById("upload-image-btn");
 
 let currentRoom = "LOBBY";
 let nickname = "";
@@ -54,6 +56,28 @@ function appendChatMessage(from, text, timestamp) {
   p.appendChild(meta);
   p.appendChild(document.createElement("br"));
   p.appendChild(body);
+
+  messagesEl.appendChild(p);
+  scrollToBottom();
+}
+
+function appendImageMessage(from, url, timestamp) {
+  const p = document.createElement("p");
+  p.className = "msg";
+
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = `${fmtTime(timestamp)} | ${from}`;
+
+  const img = document.createElement("img");
+  img.className = "chat-image";
+  img.src = url;
+  img.alt = `Image from ${from}`;
+  img.loading = "lazy";
+
+  p.appendChild(meta);
+  p.appendChild(document.createElement("br"));
+  p.appendChild(img);
 
   messagesEl.appendChild(p);
   scrollToBottom();
@@ -116,7 +140,11 @@ socket.on("room-joined", ({ room, online }) => {
 
 socket.on("room-history", (messages) => {
   for (const msg of messages) {
-    appendChatMessage(msg.sender, msg.text, msg.timestamp);
+    if (msg.type === "image") {
+      appendImageMessage(msg.sender, msg.url, msg.timestamp);
+    } else {
+      appendChatMessage(msg.sender, msg.text, msg.timestamp);
+    }
   }
 });
 
@@ -134,6 +162,11 @@ socket.on("system-message", ({ room, text, timestamp }) => {
 socket.on("chat-message", ({ room, from, text, timestamp }) => {
   if (room !== currentRoom) return;
   appendChatMessage(from, text, timestamp);
+});
+
+socket.on("chat-image", ({ room, from, url, timestamp }) => {
+  if (room !== currentRoom) return;
+  appendImageMessage(from, url, timestamp);
 });
 
 socket.on("rate-limited", ({ message }) => {
@@ -155,6 +188,37 @@ joinRoomBtnEl.addEventListener("click", () => {
   socket.emit("join-room", room || "LOBBY");
   roomInputEl.value = "";
   roomInputEl.focus();
+});
+
+uploadImageBtnEl.addEventListener("click", () => {
+  imageInputEl.click();
+});
+
+imageInputEl.addEventListener("change", async () => {
+  const file = imageInputEl.files && imageInputEl.files[0];
+  if (!file) return;
+
+  const data = new FormData();
+  data.append("image", file);
+
+  try {
+    appendSystemMessage("Uploading image...");
+    const res = await fetch("/upload", {
+      method: "POST",
+      body: data
+    });
+
+    const body = await res.json();
+    if (!res.ok || !body.url) {
+      throw new Error(body.error || "Upload failed");
+    }
+
+    socket.emit("chat-image", body.url);
+  } catch (err) {
+    appendSystemMessage(`Image upload failed: ${err.message}`);
+  } finally {
+    imageInputEl.value = "";
+  }
 });
 
 formEl.addEventListener("submit", (e) => {

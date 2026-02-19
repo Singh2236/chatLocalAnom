@@ -117,9 +117,18 @@ header p {
   font-style: italic;
 }
 
+.chat-image {
+  width: min(320px, 100%);
+  max-height: 280px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+  margin-top: 4px;
+}
+
 .composer {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
 }
 
