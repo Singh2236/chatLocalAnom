@@ -26,6 +26,13 @@ db.serialize(() => {
       created_at INTEGER NOT NULL
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      room TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`INSERT OR IGNORE INTO rooms (room, created_at) VALUES (?, ?)`, [DEFAULT_ROOM, Date.now()]);
 });
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -107,32 +114,49 @@ function emitRoomOnline(room) {
   });
 }
 
-function getOpenRooms() {
-  const out = [];
-  for (const [room, members] of io.sockets.adapter.rooms) {
-    if (io.sockets.sockets.has(room)) continue;
-    if (!/^[A-Z0-9]{1,12}$/.test(room)) continue;
-    out.push({ room, count: members.size });
-  }
-  out.sort((a, b) => b.count - a.count || a.room.localeCompare(b.room));
-  return out;
+function ensureRoomExists(room) {
+  db.run(`INSERT OR IGNORE INTO rooms (room, created_at) VALUES (?, ?)`, [room, Date.now()]);
+}
+
+function getRoomsList(callback) {
+  db.all(`SELECT room FROM rooms`, [], (err, rows) => {
+    if (err) {
+      callback([]);
+      return;
+    }
+    const out = rows
+      .map((row) => row.room)
+      .filter((room) => /^[A-Z0-9]{1,12}$/.test(room))
+      .map((room) => ({ room, count: roomOnlineCount(room) }));
+    out.sort((a, b) => b.count - a.count || a.room.localeCompare(b.room));
+    callback(out);
+  });
+}
+
+function emitRoomsListTo(socket) {
+  getRoomsList((rooms) => {
+    socket.emit("rooms-list", rooms);
+  });
 }
 
 function broadcastRoomsList() {
-  io.emit("rooms-list", getOpenRooms());
+  getRoomsList((rooms) => {
+    io.emit("rooms-list", rooms);
+  });
 }
 
 function joinRoom(socket, requestedRoom) {
   const nextRoom = normalizeRoom(requestedRoom);
   const prevRoom = socket.data.room;
   const nickname = socket.data.nickname;
+  ensureRoomExists(nextRoom);
 
   if (prevRoom === nextRoom) {
     socket.emit("room-joined", {
       room: nextRoom,
       online: roomOnlineCount(nextRoom)
     });
-    socket.emit("rooms-list", getOpenRooms());
+    emitRoomsListTo(socket);
     readRoomHistory(nextRoom, (history) => {
       socket.emit("room-history", history);
     });
@@ -183,7 +207,7 @@ io.on("connection", (socket) => {
   });
 
   joinRoom(socket, DEFAULT_ROOM);
-  socket.emit("rooms-list", getOpenRooms());
+  emitRoomsListTo(socket);
 
   socket.on("join-room", (roomCode) => {
     joinRoom(socket, roomCode);
