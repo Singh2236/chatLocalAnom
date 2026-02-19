@@ -36,4 +36,4 @@ Anonymous chat app with room codes, profanity filtering, spam protection, image 
 - Room code format: uppercase letters/numbers, max length 12.
 - Uploaded image files are served from `/uploads`.
 - Nearby group room code is derived from coarse coordinate grid (~0.25 degrees); raw coordinates are not stored.
-- Weather widget uses browser geolocation + Open-Meteo API.
+- Weather widget uses browser geolocation + Open-Meteo API, with IP-based fallback for approximate city/weather.

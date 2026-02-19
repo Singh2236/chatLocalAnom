@@ -205,58 +205,108 @@ async function loadCityName(latitude, longitude) {
   return `City: ${parts.join(", ")}`;
 }
 
-function requestWeatherByLocation() {
-  if (!navigator.geolocation) {
-    weatherStatusEl.textContent = "Geolocation not supported in this browser.";
-    weatherCityEl.textContent = "City: unavailable";
-    return;
+function getBrowserLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation unsupported"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+      },
+      () => reject(new Error("Geolocation unavailable")),
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  });
+}
+
+async function loadApproxLocationByIP() {
+  const res = await fetch("https://ipapi.co/json/");
+  if (!res.ok) {
+    throw new Error("IP location lookup failed");
   }
 
+  const data = await res.json();
+  const latitude = Number(data.latitude);
+  const longitude = Number(data.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error("IP location coordinates unavailable");
+  }
+
+  const parts = [];
+  if (data.city) parts.push(data.city);
+  if (data.region) {
+    parts.push(data.region);
+  } else if (data.country_name) {
+    parts.push(data.country_name);
+  }
+
+  return {
+    latitude,
+    longitude,
+    cityLabel: parts.length ? `City: ${parts.join(", ")}` : "City: unavailable"
+  };
+}
+
+async function requestWeatherByLocation() {
   weatherStatusEl.textContent = "Requesting location...";
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      try {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
+  weatherCityEl.textContent = "City: locating...";
 
-        const [weatherResult, cityResult] = await Promise.allSettled([
-          loadWeather(latitude, longitude),
-          loadCityName(latitude, longitude)
-        ]);
+  let latitude;
+  let longitude;
+  let fallbackCityLabel = null;
+  let usedApproximateLocation = false;
 
-        if (cityResult.status === "fulfilled") {
-          weatherCityEl.textContent = cityResult.value;
-        } else {
-          weatherCityEl.textContent = "City: unavailable";
-        }
-
-        if (weatherResult.status === "rejected") {
-          throw weatherResult.reason;
-        }
-      } catch (err) {
-        weatherStatusEl.textContent = `Weather error: ${err.message}`;
-      }
-    },
-    (error) => {
-      if (error.code === 1) {
-        weatherStatusEl.textContent = "Location permission denied.";
-        weatherCityEl.textContent = "City: permission denied";
-        return;
-      }
-      if (error.code === 2) {
-        weatherStatusEl.textContent = "Could not get your location.";
-        weatherCityEl.textContent = "City: unavailable";
-        return;
-      }
-      weatherStatusEl.textContent = "Location request timed out.";
+  try {
+    const browserLocation = await getBrowserLocation();
+    latitude = browserLocation.latitude;
+    longitude = browserLocation.longitude;
+  } catch (_err) {
+    try {
+      const ipLocation = await loadApproxLocationByIP();
+      latitude = ipLocation.latitude;
+      longitude = ipLocation.longitude;
+      fallbackCityLabel = ipLocation.cityLabel;
+      usedApproximateLocation = true;
+    } catch (_ipErr) {
+      weatherStatusEl.textContent = "Location unavailable.";
       weatherCityEl.textContent = "City: unavailable";
-    },
-    {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 60000
+      return;
     }
-  );
+  }
+
+  try {
+    const [weatherResult, cityResult] = await Promise.allSettled([
+      loadWeather(latitude, longitude),
+      loadCityName(latitude, longitude)
+    ]);
+
+    if (cityResult.status === "fulfilled") {
+      weatherCityEl.textContent = cityResult.value;
+    } else {
+      weatherCityEl.textContent = fallbackCityLabel || "City: unavailable";
+    }
+
+    if (weatherResult.status === "rejected") {
+      throw weatherResult.reason;
+    }
+
+    if (usedApproximateLocation) {
+      weatherStatusEl.textContent =
+        `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} (approx by IP)`;
+    }
+  } catch (err) {
+    weatherStatusEl.textContent = `Weather error: ${err.message}`;
+  }
 }
 
 socket.on("connect", () => {
