@@ -11,6 +11,10 @@ const joinLocationBtnEl = document.getElementById("join-location-btn");
 const roomsListEl = document.getElementById("rooms-list");
 const imageInputEl = document.getElementById("image-input");
 const uploadImageBtnEl = document.getElementById("upload-image-btn");
+const refreshWeatherBtnEl = document.getElementById("refresh-weather-btn");
+const weatherStatusEl = document.getElementById("weather-status");
+const weatherMainEl = document.getElementById("weather-main");
+const weatherDetailEl = document.getElementById("weather-detail");
 
 let currentRoom = "LOBBY";
 let nickname = "";
@@ -115,6 +119,99 @@ function renderRoomsList(rooms) {
     li.appendChild(button);
     roomsListEl.appendChild(li);
   }
+}
+
+function weatherCodeToText(code) {
+  const map = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Depositing rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    80: "Rain showers",
+    81: "Rain showers",
+    82: "Violent rain showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with hail",
+    99: "Thunderstorm with hail"
+  };
+  return map[Number(code)] || "Unknown conditions";
+}
+
+async function loadWeather(latitude, longitude) {
+  weatherStatusEl.textContent = "Loading weather...";
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}` +
+    `&longitude=${encodeURIComponent(longitude)}` +
+    "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto";
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("Weather API request failed");
+  }
+
+  const data = await res.json();
+  const current = data.current || {};
+  const units = data.current_units || {};
+
+  if (typeof current.temperature_2m !== "number") {
+    throw new Error("Weather data unavailable");
+  }
+
+  const condition = weatherCodeToText(current.weather_code);
+  const tempUnit = units.temperature_2m || "°C";
+  const humidityUnit = units.relative_humidity_2m || "%";
+  const windUnit = units.wind_speed_10m || "km/h";
+
+  weatherMainEl.textContent = `${current.temperature_2m}${tempUnit} - ${condition}`;
+  weatherDetailEl.textContent =
+    `Humidity ${current.relative_humidity_2m}${humidityUnit} | ` +
+    `Wind ${current.wind_speed_10m}${windUnit}`;
+  weatherStatusEl.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function requestWeatherByLocation() {
+  if (!navigator.geolocation) {
+    weatherStatusEl.textContent = "Geolocation not supported in this browser.";
+    return;
+  }
+
+  weatherStatusEl.textContent = "Requesting location...";
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      try {
+        await loadWeather(position.coords.latitude, position.coords.longitude);
+      } catch (err) {
+        weatherStatusEl.textContent = `Weather error: ${err.message}`;
+      }
+    },
+    (error) => {
+      if (error.code === 1) {
+        weatherStatusEl.textContent = "Location permission denied.";
+        return;
+      }
+      if (error.code === 2) {
+        weatherStatusEl.textContent = "Could not get your location.";
+        return;
+      }
+      weatherStatusEl.textContent = "Location request timed out.";
+    },
+    {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 60000
+    }
+  );
 }
 
 socket.on("connect", () => {
@@ -234,6 +331,10 @@ joinLocationBtnEl.addEventListener("click", () => {
   );
 });
 
+refreshWeatherBtnEl.addEventListener("click", () => {
+  requestWeatherByLocation();
+});
+
 uploadImageBtnEl.addEventListener("click", () => {
   imageInputEl.click();
 });
@@ -273,3 +374,5 @@ formEl.addEventListener("submit", (e) => {
   inputEl.value = "";
   inputEl.focus();
 });
+
+requestWeatherByLocation();

@@ -35,6 +35,16 @@
       <aside class="rooms-pane">
         <h2>Open Rooms</h2>
         <ul id="rooms-list" class="rooms-list" aria-live="polite"></ul>
+
+        <section class="weather-widget" aria-live="polite">
+          <div class="weather-head">
+            <h2>Local Weather</h2>
+            <button id="refresh-weather-btn" type="button">Refresh</button>
+          </div>
+          <p id="weather-status">Location needed to load weather.</p>
+          <p id="weather-main">--</p>
+          <p id="weather-detail">--</p>
+        </section>
       </aside>
     </main>
 
