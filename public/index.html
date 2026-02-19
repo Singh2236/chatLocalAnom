@@ -11,8 +11,14 @@
       <header>
         <h1>Local Anonymous Chat</h1>
         <p id="status">Connecting...</p>
-        <p id="online">Online: 0</p>
+        <p id="room">Room: LOBBY</p>
+        <p id="online">Online in room: 0</p>
       </header>
+
+      <section class="room-controls">
+        <input id="room-input" maxlength="12" placeholder="Room code (e.g. TEAM1)" />
+        <button id="join-room-btn" type="button">Join / Create Room</button>
+      </section>
 
       <section id="messages" class="messages" aria-live="polite"></section>
 

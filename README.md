@@ -1,25 +1,33 @@
 ﻿# Local Anonymous Chat
 
-A simple web app for anonymous chat on your local network.
+Anonymous chat app with room codes, profanity filtering, spam protection, and SQLite message history.
 
-## Run
+## Features
+
+- Anonymous random nickname per connection.
+- Room codes (join/create room by code).
+- Profanity filtering (common abusive words are masked).
+- Basic anti-spam limits (message burst + very fast send blocking).
+- SQLite persistence (`chat.db`) for room message history.
+
+## Run local
 
 1. Install dependencies:
-   npm install
+   `npm install`
 2. Start server:
-   npm start
-3. Open in browser:
-   http://localhost:3000
+   `npm start`
+3. Open:
+   `http://localhost:3000`
 
-## Local network use
+## Cloud (Render)
 
-- Find your machine IP (example `192.168.1.8`).
-- Other users on the same network can open:
-  `http://YOUR_IP:3000`
-- Allow Node.js through your firewall if prompted.
+- Uses `process.env.PORT`, so Render works out of the box.
+- Build command: `npm install`
+- Start command: `npm start`
+- Add a persistent disk in Render if you want `chat.db` to survive deploys/restarts.
 
 ## Notes
 
-- No login, no permanent accounts, no database.
-- Nicknames are random per connection.
-- Messages are in-memory only and disappear when server restarts.
+- History load: last 100 messages per room.
+- Current persistence stores chat messages only (not system join/leave events).
+- Room code format: uppercase letters/numbers, max length 12.
