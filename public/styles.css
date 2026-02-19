@@ -107,6 +107,12 @@ body {
   color: #586066;
 }
 
+#weather-city {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #2f3b3f;
+}
+
 #weather-main {
   margin: 0 0 6px;
   font-weight: 700;

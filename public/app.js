@@ -13,6 +13,7 @@ const imageInputEl = document.getElementById("image-input");
 const uploadImageBtnEl = document.getElementById("upload-image-btn");
 const refreshWeatherBtnEl = document.getElementById("refresh-weather-btn");
 const weatherStatusEl = document.getElementById("weather-status");
+const weatherCityEl = document.getElementById("weather-city");
 const weatherMainEl = document.getElementById("weather-main");
 const weatherDetailEl = document.getElementById("weather-detail");
 
@@ -180,9 +181,34 @@ async function loadWeather(latitude, longitude) {
   weatherStatusEl.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+async function loadCityName(latitude, longitude) {
+  const url =
+    `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${encodeURIComponent(latitude)}` +
+    `&longitude=${encodeURIComponent(longitude)}&language=en&count=1`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("City lookup failed");
+  }
+
+  const data = await res.json();
+  const result = Array.isArray(data.results) ? data.results[0] : null;
+  if (!result || !result.name) {
+    return "City: unavailable";
+  }
+
+  const parts = [result.name];
+  if (result.admin1) {
+    parts.push(result.admin1);
+  } else if (result.country) {
+    parts.push(result.country);
+  }
+  return `City: ${parts.join(", ")}`;
+}
+
 function requestWeatherByLocation() {
   if (!navigator.geolocation) {
     weatherStatusEl.textContent = "Geolocation not supported in this browser.";
+    weatherCityEl.textContent = "City: unavailable";
     return;
   }
 
@@ -190,7 +216,23 @@ function requestWeatherByLocation() {
   navigator.geolocation.getCurrentPosition(
     async (position) => {
       try {
-        await loadWeather(position.coords.latitude, position.coords.longitude);
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+
+        const [weatherResult, cityResult] = await Promise.allSettled([
+          loadWeather(latitude, longitude),
+          loadCityName(latitude, longitude)
+        ]);
+
+        if (cityResult.status === "fulfilled") {
+          weatherCityEl.textContent = cityResult.value;
+        } else {
+          weatherCityEl.textContent = "City: unavailable";
+        }
+
+        if (weatherResult.status === "rejected") {
+          throw weatherResult.reason;
+        }
       } catch (err) {
         weatherStatusEl.textContent = `Weather error: ${err.message}`;
       }
@@ -198,13 +240,16 @@ function requestWeatherByLocation() {
     (error) => {
       if (error.code === 1) {
         weatherStatusEl.textContent = "Location permission denied.";
+        weatherCityEl.textContent = "City: permission denied";
         return;
       }
       if (error.code === 2) {
         weatherStatusEl.textContent = "Could not get your location.";
+        weatherCityEl.textContent = "City: unavailable";
         return;
       }
       weatherStatusEl.textContent = "Location request timed out.";
+      weatherCityEl.textContent = "City: unavailable";
     },
     {
       enableHighAccuracy: false,

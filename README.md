@@ -7,7 +7,7 @@ Anonymous chat app with room codes, profanity filtering, spam protection, image 
 - Anonymous random nickname per connection.
 - Room codes (join/create room by code).
 - Location-based nearby groups (join a room based on your current location).
-- Local weather widget (current weather from your location).
+- Local weather widget (current weather and city from your location).
 - Profanity filtering (common abusive words are masked).
 - Basic anti-spam limits (message burst + very fast send blocking).
 - Image upload and sharing in room chat (up to 5 MB per file).
