@@ -42,6 +42,7 @@ body {
   border-radius: 10px;
   background: #fff;
   padding: 10px;
+  align-self: start;
 }
 
 .rooms-pane h2 {
@@ -149,6 +150,14 @@ button:hover {
 @media (max-width: 600px) {
   .app {
     grid-template-columns: 1fr;
+  }
+
+  .rooms-pane {
+    order: -1;
+  }
+
+  .messages {
+    height: 42vh;
   }
 
   .room-controls,
