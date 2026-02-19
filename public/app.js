@@ -7,6 +7,7 @@ const formEl = document.getElementById("chat-form");
 const inputEl = document.getElementById("message-input");
 const roomInputEl = document.getElementById("room-input");
 const joinRoomBtnEl = document.getElementById("join-room-btn");
+const joinLocationBtnEl = document.getElementById("join-location-btn");
 const roomsListEl = document.getElementById("rooms-list");
 const imageInputEl = document.getElementById("image-input");
 const uploadImageBtnEl = document.getElementById("upload-image-btn");
@@ -173,6 +174,16 @@ socket.on("rate-limited", ({ message }) => {
   appendSystemMessage(message || "Slow down.");
 });
 
+socket.on("location-room-joined", ({ room, gridDegrees }) => {
+  appendSystemMessage(
+    `Joined nearby group ${room} (area grid ~${Number(gridDegrees).toFixed(2)} degrees).`
+  );
+});
+
+socket.on("location-room-error", ({ message }) => {
+  appendSystemMessage(message || "Unable to join nearby group.");
+});
+
 socket.on("rooms-list", (rooms) => {
   renderRoomsList(Array.isArray(rooms) ? rooms : []);
 });
@@ -188,6 +199,39 @@ joinRoomBtnEl.addEventListener("click", () => {
   socket.emit("join-room", room || "LOBBY");
   roomInputEl.value = "";
   roomInputEl.focus();
+});
+
+joinLocationBtnEl.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    appendSystemMessage("Geolocation is not supported in this browser.");
+    return;
+  }
+
+  appendSystemMessage("Requesting your location...");
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      socket.emit("join-location-room", {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      });
+    },
+    (error) => {
+      if (error.code === 1) {
+        appendSystemMessage("Location permission denied.");
+        return;
+      }
+      if (error.code === 2) {
+        appendSystemMessage("Could not get your location.");
+        return;
+      }
+      appendSystemMessage("Location request timed out.");
+    },
+    {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 60000
+    }
+  );
 });
 
 uploadImageBtnEl.addEventListener("click", () => {

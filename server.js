@@ -16,6 +16,7 @@ const MAX_MSG_PER_WINDOW = 6;
 const RATE_WINDOW_MS = 10000;
 const MIN_MSG_GAP_MS = 400;
 const UPLOAD_DIR = path.join(__dirname, "uploads");
+const LOCATION_GRID_DEGREES = 0.25;
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -92,6 +93,19 @@ function normalizeRoom(input) {
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 12);
   return clean || DEFAULT_ROOM;
+}
+
+function locationRoomFromCoordinates(latitude, longitude) {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+
+  const latIndex = Math.floor((lat + 90) / LOCATION_GRID_DEGREES);
+  const lonIndex = Math.floor((lon + 180) / LOCATION_GRID_DEGREES);
+  const latCode = latIndex.toString(36).toUpperCase().padStart(3, "0");
+  const lonCode = lonIndex.toString(36).toUpperCase().padStart(3, "0");
+  return `LOC${latCode}${lonCode}`;
 }
 
 const blockedWords = ["fuck", "shit", "bitch", "asshole", "bastard", "dick", "cunt", "motherfucker"];
@@ -282,6 +296,21 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", (roomCode) => {
     joinRoom(socket, roomCode);
+  });
+
+  socket.on("join-location-room", (payload) => {
+    const roomCode = locationRoomFromCoordinates(payload?.latitude, payload?.longitude);
+    if (!roomCode) {
+      socket.emit("location-room-error", {
+        message: "Location data is invalid. Please try again."
+      });
+      return;
+    }
+    joinRoom(socket, roomCode);
+    socket.emit("location-room-joined", {
+      room: roomCode,
+      gridDegrees: LOCATION_GRID_DEGREES
+    });
   });
 
   socket.on("chat-message", (text) => {
